@@ -1,0 +1,65 @@
+# KISS Open License Version 1.0 (KOL-v1)
+#
+# SPDX-FileCopyrightText: 2026 I-plusplus Inc.
+# SPDX-License-Identifier: LicenseRef-KOL-v1
+#
+# Copyright remains with its respective holders; original copyright and attribution notices must be preserved.
+# Contributors may add copyright notices for their own original modifications.
+# Distributed modifications must be identified as required by Section 4(c) of KOL-v1.
+#
+# Use, modification, distribution, and incorporation into commercial or proprietary software are permitted
+# without license fees or source disclosure, subject to all terms of the complete KOL-v1 license.
+#
+# Contributors grant the patent permissions stated in KOL-v1. Outputs are not covered merely because a
+# KOL-licensed tool produced them; embedded licensed material remains subject to applicable license terms.
+#
+# THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OR LIABILITY TO THE EXTENT PERMITTED BY APPLICABLE LAW.
+#
+# This header is a summary, not a separate license or an amendment to KOL-v1.
+# All terms and conditions of KOL-v1 apply. See the accompanying LICENSE file for the complete license text.
+
+name: Minimum CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  minimum:
+    name: Minimum CI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test positive and failure paths
+        run: |
+          python3 -B - <<'PY'
+          import unittest
+          suite = unittest.TestLoader().discover('tests')
+          if suite.countTestCases() < 40:
+              raise SystemExit('Missing or reduced test suite')
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.skipped or result.expectedFailures:
+              raise SystemExit('Tests failed or were not fully executed')
+          PY
+      - name: Check repository evidence and build bundle
+        run: |
+          python3 -I -B src/license_check.py --root "$GITHUB_WORKSPACE" --policy .license-policy.json
+          python3 -B tools/build_bundle.py --output "$RUNNER_TEMP/license-check-0.1.0.pyz"
+          python3 -I -B "$RUNNER_TEMP/license-check-0.1.0.pyz" --root "$GITHUB_WORKSPACE" --policy .license-policy.json
+          cd "$RUNNER_TEMP"
+          sha256sum license-check-0.1.0.pyz > license-check-0.1.0.pyz.sha256
+      - name: Retain tested distribution candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: license-check-0.1.0
+          path: |
+            ${{ runner.temp }}/license-check-0.1.0.pyz
+            ${{ runner.temp }}/license-check-0.1.0.pyz.sha256
+          if-no-files-found: error
+          retention-days: 14

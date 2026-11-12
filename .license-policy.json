@@ -19,7 +19,8 @@
         "tests/*.py",
         "tools/*.py",
         ".github/workflows/*.yml",
-        ".gitignore"
+        ".gitignore",
+        "action.yml"
       ],
       "kind": "first_party",
       "license": "LicenseRef-KOL-v1",

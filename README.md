@@ -113,15 +113,61 @@ No generated archive or binary belongs in Git. The CI workflow tests the checker
 checks this repository with its policy, builds and runs the bundle, then retains
 the bundle and checksum as short-lived Actions artifacts.
 
-For durable consumption, maintainers should publish a reviewed version as a
-release asset. A consumer must pin the version and SHA-256 before executing it.
-Never execute a `latest` download or accept a mismatch. Actions artifacts are
-not a durable dependency: they expire and cross-repository access can require
-permissions unavailable to fork PRs. Release publication is not automated here.
+For durable consumption, maintainers publish a reviewed release with an asset named
+`license-check.pyz`. Release publication is not automated here. The composite
+action resolves the latest stable release on every run and verifies its GitHub
+API SHA-256 digest and size before executing exactly those downloaded bytes.
+The action's bootstrap behavior is pinned to a reviewed commit; the checker
+version is intentionally not pinned in consuming repositories.
 
-Keep consumer jobs read-only and secret-free for fork PRs. Run on pull requests,
-merge groups and main pushes. Pin the checker independently of untrusted PR
-content. Required status checks and protected review of workflow/policy changes
+## GitHub Actions integration
+
+Replace `REVIEWED_ACTION_COMMIT_SHA` below with the full reviewed commit SHA of
+this action. Keep existing source/test jobs and the always-run `Minimum CI`
+aggregate; this action replaces only the license retrieval/execution steps.
+
+```yaml
+permissions:
+  contents: read
+jobs:
+  license:
+    name: License policy checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: i-pp/license-check-ci@REVIEWED_ACTION_COMMIT_SHA
+        with:
+          policy: .github/license-policy.json
+```
+
+The root defaults to `github.workspace`. The policy defaults to
+`.github/license-policy.json`; override it for a different reviewed policy path.
+Linux and Python 3 are required. The optional `token` input defaults to
+`github.token`, using the caller's read-only permissions. Set it to an empty
+string for anonymous metadata access, subject to GitHub's lower rate limit.
+The token goes only to the fixed GitHub release API, never to asset redirects or
+the checker subprocess. No secrets or `id-token` permission are needed.
+
+The bootstrap resolves metadata once, requires a non-draft, non-prerelease tag
+and a unique uploaded `license-check.pyz`, and rejects absent digests, oversized
+assets, mismatched repository/tag/name, unsafe redirects, download errors and
+hash mismatches. It requires both exit zero and a schema 1 / PASS report. It
+logs release ID, tag, asset ID, asset URL and digest. There is no fallback to a
+cached or pinned checker and no automatic mismatch repair. Network outages and
+rate limits fail the job; the job timeout bounds the whole operation.
+
+This is integrity checking against GitHub metadata, not a signature or build
+provenance guarantee. The logged source URL identifies the artifact, not an
+attested source commit. A compromised publisher could publish a malicious new
+release and matching digest. Latest-release selection accepts this publisher
+trust and allows checker behavior to change without a consumer commit.
+
+Run consumer workflows on pull requests, merge groups and main pushes, without
+path filters. Keep consumer jobs read-only and secret-free for fork PRs.
+Required status checks and protected review of workflow/policy changes
 must be configured separately; this checker cannot prevent a contributor from
 editing an unprotected workflow to remove the check.
 

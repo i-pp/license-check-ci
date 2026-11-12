@@ -54,6 +54,10 @@ jobs:
           python3 -I -B "$RUNNER_TEMP/license-check-0.1.1.pyz" --root "$GITHUB_WORKSPACE" --policy .license-policy.json
           cd "$RUNNER_TEMP"
           sha256sum license-check-0.1.1.pyz > license-check-0.1.1.pyz.sha256
+      - name: Verify this repository with the latest published checker
+        uses: ./
+        with:
+          policy: .license-policy.json
       - name: Retain tested distribution candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

@@ -161,8 +161,18 @@ def resolve(metadata):
     }
 
 
+def normalize_root(root, workspace=None):
+    """Anchor relative checkout paths without resolving symlinks."""
+    if root.is_absolute():
+        return root
+    base = Path(workspace) if workspace else Path.cwd()
+    require(base.is_absolute(), "Workspace must be absolute")
+    return base / root
+
+
 def execute(root, policy, fetcher=fetch, runner=subprocess.run):
     """Run exactly the bytes verified against the single metadata snapshot."""
+    root = normalize_root(root, os.environ.get("GITHUB_WORKSPACE"))
     release = resolve(parse_json(fetcher(API, 1024 * 1024, os.environ.get("GH_TOKEN"))))
     raw = fetcher(release["source"], LIMIT)  # Deliberately no token argument.
     require(len(raw) == release["size"], "Asset size mismatch")

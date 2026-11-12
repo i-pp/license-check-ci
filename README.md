@@ -183,3 +183,5 @@ Project-authored code and documentation are licensed under the root LICENSE
 and NOTICE, including JSON configuration without an inline comment. Third-party
 materials retain their own terms. KOL is a custom license, not OSI approval or
 an SPDX-listed identifier.
+
+Relative `root` inputs are anchored to `github.workspace`; absolute inputs remain unchanged. Symlinks are not resolved by the bootstrap, so the checker retains its root-symlink validation.

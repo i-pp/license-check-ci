@@ -1,0 +1,9 @@
+License Check CI
+Copyright 2026 I-plusplus Inc.
+
+Project-authored code and documentation, including configuration without an
+inline source header, are licensed under KISS Open License Version 1.0.
+See LICENSE for the complete terms. Existing third-party notices and licenses
+remain authoritative. No third-party implementation is bundled by this project.
+Python, Git, GitHub Actions and external licensing texts retain their own terms.
+This notice does not amend LICENSE or grant trademark rights.

@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "licenses": {
+    "LicenseRef-KOL-v1": {
+      "path": "LICENSE",
+      "sha256": "df951a913ed6f5fe319b9e1b1a3cc2b6e396ea65b9d1687b9f735bd8f117ea9c"
+    }
+  },
+  "notice": {
+    "path": "NOTICE",
+    "required_text": [
+      "I-plusplus Inc."
+    ]
+  },
+  "rules": [
+    {
+      "paths": [
+        "src/*.py",
+        "tests/*.py",
+        "tools/*.py",
+        ".github/workflows/*.yml",
+        ".gitignore"
+      ],
+      "kind": "first_party",
+      "license": "LicenseRef-KOL-v1",
+      "header": "spdx",
+      "header_markers": [
+        "SPDX-FileCopyrightText: 2026 I-plusplus Inc.",
+        "See the accompanying LICENSE file"
+      ]
+    },
+    {
+      "paths": [
+        "LICENSE",
+        "NOTICE",
+        "README.md",
+        ".license-policy.json"
+      ],
+      "kind": "first_party",
+      "license": "LicenseRef-KOL-v1",
+      "header": "root"
+    }
+  ]
+}

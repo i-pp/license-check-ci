@@ -34,7 +34,7 @@ commit and an index containing the files to inspect. Commit the policy as well.
 python3 -I -B src/license_check.py --root "$PWD" \
   --policy .license-policy.json --report /tmp/license-report.json
 python3 -B -m unittest discover -s tests -v
-python3 -B tools/build_bundle.py --output /tmp/license-check-0.1.0.pyz
+python3 -B tools/build_bundle.py --output /tmp/license-check-0.1.1.pyz
 ```
 
 Use a new report and bundle destination; existing files are never overwritten.
@@ -67,6 +67,7 @@ references fail. Include the policy itself in the classification.
 | `first_party` | `license`, `header` (`root` or `spdx`) |
 | `third_party` | `license`, `evidence`, `origin` |
 | `generated_metadata` | `evidence`, `reason`, `origin`, `format` (`json` or `toml`) |
+| `rights_reserved` | `evidence`, `owner`, `reason`, `required_text` (nonempty markers) |
 | `exception` | `evidence`, `reason`, `owner` |
 
 `paths` is a nonempty list of normalized repository-relative patterns. Absolute
@@ -91,6 +92,14 @@ the dependencies it describes. The report lists these paths under
 `metadata_not_license_assessed`. Its reason and evidence must justify why it is
 metadata rather than implementation; do not use it to relabel unlicensed source.
 Unknown rights remain an `exception`, not generated metadata.
+
+Reserved rights are not unknown rights. `rights_reserved` requires a reviewed,
+tracked evidence document and every configured marker in that document. Reports
+list these paths under `rights_reserved_no_oss_grant` with `license_grant: false`
+and `oss_permission: false`. A PASS confirms only the declared retention evidence;
+it grants no use, redistribution or OSS rights and does not authenticate ownership.
+Do not use this category to conceal unresolved rights: use `exception` instead.
+At least one explicitly license-covered file is still required in the repository.
 
 Any exception produces `INCOMPLETE` and a nonzero exit. A report cannot claim a
 complete pass by excluding unresolved files. At least one first-party or

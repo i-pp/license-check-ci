@@ -106,6 +106,107 @@ class CheckerTests(unittest.TestCase):
         """Inspect the fixture with the production entry point."""
         return checker.inspect(self.root, ".license-policy.json")
 
+    def reserved_fixture(self):
+        """Declare synthetic retained rights without copying real corporate assets."""
+        self.write("logo.bin", b"synthetic-logo")
+        self.write(
+            "RIGHTS", "Example Studio retains all rights. No OSS permission is granted."
+        )
+        self.policy["rules"][0]["paths"] = [
+            "LICENSE",
+            "NOTICE",
+            "main.py",
+            "RIGHTS",
+            ".license-policy.json",
+        ]
+        rule = {
+            "paths": ["logo.bin"],
+            "kind": "rights_reserved",
+            "owner": "Example Studio",
+            "reason": "Synthetic brand asset",
+            "evidence": "RIGHTS",
+            "required_text": ["retains all rights", "No OSS permission"],
+        }
+        self.policy["rules"].append(rule)
+        return rule
+
+    def test_reserved_rights_pass_without_oss_grant(self):
+        self.reserved_fixture()
+        self.save()
+        report = self.inspect()
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["counts"]["rights_reserved"], 1)
+        entry = report["rights_reserved_no_oss_grant"][0]
+        self.assertFalse(entry["license_grant"])
+        self.assertFalse(entry["oss_permission"])
+        self.assertEqual(entry["path"], "logo.bin")
+
+    def test_reserved_rights_required_fields(self):
+        rule = self.reserved_fixture()
+        for field in ("owner", "reason", "evidence", "required_text"):
+            with self.subTest(field=field):
+                value = rule.pop(field)
+                self.save()
+                with self.assertRaises(ValueError):
+                    self.inspect()
+                rule[field] = value
+
+    def test_reserved_rights_invalid_text(self):
+        rule = self.reserved_fixture()
+        for field in ("owner", "reason"):
+            original = rule[field]
+            for value in (None, 3, "", "   ", "x" * 2049):
+                with self.subTest(field=field, value=value):
+                    rule[field] = value
+                    self.save()
+                    with self.assertRaises(ValueError):
+                        self.inspect()
+            rule[field] = original
+
+    def test_reserved_rights_invalid_markers(self):
+        rule = self.reserved_fixture()
+        for value in (None, "text", [], [""], [4], ["missing clause"]):
+            with self.subTest(value=value):
+                rule["required_text"] = value
+                self.save()
+                with self.assertRaises(ValueError):
+                    self.inspect()
+
+    def test_reserved_rights_evidence_missing(self):
+        rule = self.reserved_fixture()
+        rule["evidence"] = "missing.txt"
+        self.save()
+        with self.assertRaises(ValueError):
+            self.inspect()
+
+    def test_reserved_rights_cannot_claim_license(self):
+        rule = self.reserved_fixture()
+        rule["license"] = "Test-License"
+        self.save()
+        with self.assertRaises(ValueError):
+            self.inspect()
+
+    def test_reserved_rights_unknown_exception_stays_incomplete(self):
+        self.reserved_fixture()
+        self.write("unknown.bin", b"synthetic-unknown")
+        self.policy["rules"].append(
+            {
+                "paths": ["unknown.bin"],
+                "kind": "exception",
+                "evidence": "RIGHTS",
+                "owner": "Unknown",
+                "reason": "Await rights evidence",
+            }
+        )
+        self.save()
+        self.assertEqual(self.inspect()["status"], "INCOMPLETE")
+        self.assertEqual(
+            checker.main(
+                ["--root", str(self.root), "--policy", ".license-policy.json"]
+            ),
+            1,
+        )
+
     def test_valid(self):
         self.assertEqual(self.inspect()["status"], "PASS")
         self.assertEqual(self.inspect()["tracked_files"], 4)
@@ -295,6 +396,42 @@ class CheckerTests(unittest.TestCase):
             {"kind": "first_party", "license": "Test-License", "header": "spdx"}
         )
         self.assertEqual(self.inspect()["status"], "PASS")
+
+    def test_utf8_header_boundary(self):
+        self.test_header_marker_present()
+        prefix = b"# SPDX-License-Identifier: Test-License\n"
+        for width in (2, 3, 4):
+            char = {2: "\u00e9", 3: "\u3042", 4: "\U0001f600"}[width]
+            for split in range(1, width):
+                data = prefix + b"x" * (8192 - split - len(prefix))
+                self.write("main.py", data + char.encode() + b"\n")
+                self.assertEqual(self.inspect()["status"], "PASS")
+
+    def test_invalid_utf8_after_header_limit(self):
+        self.test_spdx_present()
+        self.write(
+            "main.py",
+            b"# SPDX-License-Identifier: Test-License\n" + b"x" * 8192 + b"\xff",
+        )
+        with self.assertRaises(UnicodeDecodeError):
+            self.inspect()
+
+    def test_incomplete_utf8_at_eof(self):
+        self.test_spdx_present()
+        self.write(
+            "main.py", b"# SPDX-License-Identifier: Test-License\n" + b"\xe3\x81"
+        )
+        with self.assertRaises(UnicodeDecodeError):
+            self.inspect()
+
+    def test_header_beyond_byte_limit_rejected(self):
+        self.test_spdx_present()
+        self.write(
+            "main.py",
+            ("\u3042" * 2800 + "\n# SPDX-License-Identifier: Test-License\n").encode(),
+        )
+        with self.assertRaises(ValueError):
+            self.inspect()
 
     def test_spdx_missing(self):
         self.test_spdx_present()

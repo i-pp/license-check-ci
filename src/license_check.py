@@ -21,6 +21,7 @@
 """Check declared license evidence without determining legal ownership."""
 
 import argparse
+import codecs
 import fnmatch
 import hashlib
 import json
@@ -32,7 +33,7 @@ import sys
 import tomllib
 from pathlib import Path, PurePosixPath
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 LIMIT = 16 * 1024 * 1024
 PLACEHOLDER = re.compile(
     r"\b(TODO|TBD|PLACEHOLDER|INSERT LICENSE|YOUR NAME|LICENSE SELECTION PENDING|NOT A LICENSE GRANT)\b",
@@ -227,6 +228,7 @@ def policy_from(data):
                 "owner",
                 "header_markers",
                 "format",
+                "required_text",
             ),
         )
         require(
@@ -236,7 +238,14 @@ def policy_from(data):
             relative_path(path, pattern=True)
         kind = rule["kind"]
         require(
-            kind in ("first_party", "third_party", "exception", "generated_metadata"),
+            kind
+            in (
+                "first_party",
+                "third_party",
+                "exception",
+                "generated_metadata",
+                "rights_reserved",
+            ),
             "Unknown category",
         )
         if kind in ("first_party", "third_party"):
@@ -272,6 +281,19 @@ def policy_from(data):
             nonempty_text(rule["reason"])
             nonempty_text(rule["origin"])
             require(rule["format"] in ("json", "toml"), "Unsupported metadata format")
+        elif kind == "rights_reserved":
+            keys(
+                rule, ("paths", "kind", "evidence", "reason", "owner", "required_text")
+            )
+            relative_path(rule["evidence"])
+            nonempty_text(rule["reason"])
+            nonempty_text(rule["owner"])
+            require(
+                isinstance(rule["required_text"], list) and bool(rule["required_text"]),
+                "Empty reserved-rights evidence markers",
+            )
+            for marker in rule["required_text"]:
+                nonempty_text(marker)
         else:
             keys(rule, ("paths", "kind", "evidence", "reason", "owner"))
             relative_path(rule["evidence"])
@@ -289,6 +311,13 @@ def document(root, files, name, minimum):
         "Missing, short or placeholder evidence",
     )
     return text
+
+
+def header_text(data):
+    """Validate all UTF-8, then inspect complete characters in the first 8 KiB."""
+    data.decode("utf-8")
+    decoder = codecs.getincrementaldecoder("utf-8")("strict")
+    return decoder.decode(data[:8192], final=False)
 
 
 def inspect(root, policy_name):
@@ -316,9 +345,11 @@ def inspect(root, policy_name):
         "third_party": 0,
         "exception": 0,
         "generated_metadata": 0,
+        "rights_reserved": 0,
     }
     exceptions = []
     metadata = []
+    reserved = []
     for name in files:
         data = read_file(root, name)
         matches = []
@@ -334,7 +365,7 @@ def inspect(root, policy_name):
         rule = matches[0]
         counts[rule["kind"]] += 1
         if rule["kind"] == "first_party" and rule["header"] == "spdx":
-            header = data[:8192].decode("utf-8")
+            header = header_text(data)
             marker = "SPDX-License-Identifier: " + rule["license"]
             require(
                 any(
@@ -349,7 +380,7 @@ def inspect(root, policy_name):
                 f"Missing SPDX header: {name}",
             )
         if rule["kind"] == "first_party" and "header_markers" in rule:
-            header = data[:8192].decode("utf-8")
+            header = header_text(data)
             require(
                 all(marker in header for marker in rule["header_markers"]),
                 f"Required header text missing: {name}",
@@ -358,6 +389,22 @@ def inspect(root, policy_name):
             evidence = document(root, files, rule["evidence"], 20)
             if rule["kind"] == "first_party":
                 require(rule["license"] in evidence, "Evidence lacks license reference")
+        if rule["kind"] == "rights_reserved":
+            require(
+                all(marker in evidence for marker in rule["required_text"]),
+                "Reserved-rights evidence lacks required text",
+            )
+            reserved.append(
+                {
+                    "path": name,
+                    "owner": rule["owner"],
+                    "reason": rule["reason"],
+                    "evidence": rule["evidence"],
+                    "required_text": rule["required_text"],
+                    "license_grant": False,
+                    "oss_permission": False,
+                }
+            )
         if rule["kind"] == "generated_metadata":
             require(
                 Path(name).suffix in (".json", ".lock", ".toml"),
@@ -407,6 +454,7 @@ def inspect(root, policy_name):
         "counts": counts,
         "exceptions": exceptions,
         "metadata_not_license_assessed": metadata,
+        "rights_reserved_no_oss_grant": reserved,
         "scope": "Declared evidence only; no ownership, legal compatibility or certification guarantee",
     }
 

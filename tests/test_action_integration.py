@@ -41,7 +41,7 @@ SPEC.loader.exec_module(b)
 
 
 class IntegrationTests(unittest.TestCase):
-    def run_zipapp(self, report_status="PASS", exit_code=0):
+    def run_zipapp(self, report_status="PASS", exit_code=0, relative=False):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             source = root / "src"
@@ -52,6 +52,7 @@ from pathlib import Path
 p = argparse.ArgumentParser()
 p.add_argument('--root'); p.add_argument('--policy'); p.add_argument('--report')
 a = p.parse_args()
+assert Path(a.root).is_absolute()
 assert a.root.endswith("root with spaces;$(not-a-command)")
 assert a.policy == "policy with spaces.json"
 assert 'GH_TOKEN' not in os.environ and 'GITHUB_TOKEN' not in os.environ
@@ -90,10 +91,18 @@ raise SystemExit(%d)
 
             with patch.dict(
                 os.environ,
-                {"GH_TOKEN": "synthetic-token", "GITHUB_TOKEN": "other-token"},
+                {
+                    "GH_TOKEN": "synthetic-token",
+                    "GITHUB_TOKEN": "other-token",
+                    "GITHUB_WORKSPACE": str(root),
+                },
             ):
                 b.execute(
-                    root / "root with spaces;$(not-a-command)",
+                    (
+                        Path("root with spaces;$(not-a-command)")
+                        if relative
+                        else root / "root with spaces;$(not-a-command)"
+                    ),
                     "policy with spaces.json",
                     fetch,
                 )
@@ -101,6 +110,9 @@ raise SystemExit(%d)
 
     def test_real_zipapp_pass_and_argv_and_credentials(self):
         self.run_zipapp()
+
+    def test_real_zipapp_relative_checkout(self):
+        self.run_zipapp(relative=True)
 
     def test_real_zipapp_nonzero_with_pass_report(self):
         with self.assertRaises(ValueError):

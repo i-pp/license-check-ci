@@ -219,5 +219,27 @@ class Tests(unittest.TestCase):
             b.fetch(b.REPO, 1, "secret")
 
 
+class RootInputTests(unittest.TestCase):
+    def test_relative_checkout_uses_workspace(self):
+        self.assertEqual(
+            b.normalize_root(Path("source"), "/workspace"), Path("/workspace/source")
+        )
+
+    def test_dot_uses_workspace(self):
+        self.assertEqual(b.normalize_root(Path("."), "/workspace"), Path("/workspace"))
+
+    def test_absolute_root_is_unchanged(self):
+        self.assertEqual(
+            b.normalize_root(Path("/source"), "/workspace"), Path("/source")
+        )
+
+    def test_relative_without_workspace_uses_cwd(self):
+        self.assertEqual(b.normalize_root(Path("source")), Path.cwd() / "source")
+
+    def test_relative_workspace_is_rejected(self):
+        with self.assertRaises(ValueError):
+            b.normalize_root(Path("source"), "relative-workspace")
+
+
 if __name__ == "__main__":
     unittest.main()

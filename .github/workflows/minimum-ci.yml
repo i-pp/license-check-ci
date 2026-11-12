@@ -41,7 +41,7 @@ jobs:
           python3 -B - <<'PY'
           import unittest
           suite = unittest.TestLoader().discover('tests')
-          if suite.countTestCases() < 70:
+          if suite.countTestCases() < 76:
               raise SystemExit('Missing or reduced test suite')
           result = unittest.TextTestRunner(verbosity=2).run(suite)
           if not result.wasSuccessful() or result.skipped or result.expectedFailures:

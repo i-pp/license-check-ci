@@ -24,7 +24,7 @@ name: License policy check
 description: Resolve the latest stable checker and verify its GitHub asset digest before execution
 inputs:
   root:
-    description: Repository root to inspect
+    description: Repository root, absolute or relative to github.workspace
     required: false
     default: ${{ github.workspace }}
   policy:
